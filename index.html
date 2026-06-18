@@ -168,20 +168,34 @@
     ensureAudio();
     if (running) return;
     running = true;
+    acquireWakeLock();
     if (!isRest && round === 1 && remaining === ROUND_SEC) bell(3);
     timer = setInterval(tick, 1000);
   }
-  function stop() { running = false; clearInterval(timer); }
+  function stop() { running = false; clearInterval(timer); releaseWakeLock(); }
   function reset() { stop(); round = 1; isRest = false; remaining = ROUND_SEC; render(); }
 
   document.getElementById('playBtn').addEventListener('click', play);
   document.getElementById('stopBtn').addEventListener('click', stop);
   document.getElementById('resetBtn').addEventListener('click', reset);
 
-  // 화면 꺼짐 방지
-  let wl = null;
-  async function keepAwake() { try { if ('wakeLock' in navigator) wl = await navigator.wakeLock.request('screen'); } catch(e) {} }
-  document.body.addEventListener('click', keepAwake, { once: true });
+  // ---- 화면 꺼짐 방지 (Wake Lock) : 타이머 동작 중 화면 유지 ----
+  let wakeLock = null;
+  async function acquireWakeLock() {
+    try {
+      if ('wakeLock' in navigator && document.visibilityState === 'visible') {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      }
+    } catch (e) {}
+  }
+  async function releaseWakeLock() {
+    try { if (wakeLock) { await wakeLock.release(); wakeLock = null; } } catch (e) {}
+  }
+  // 화면이 꺼졌다 다시 켜지거나 앱으로 돌아오면, 타이머가 돌고 있을 때 다시 잠금
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && running && !wakeLock) acquireWakeLock();
+  });
 
   // ---- PWA: 설치 / 홈 화면 추가 ----
   const installBtn = document.getElementById('installBtn');
