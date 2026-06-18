@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RingClock">
+<meta name="theme-color" content="#ccff00">
+<title>RingClock</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+  :root {
+    --neon: #ccff00;
+    --neon-rest: #00e5ff;
+    --bg: #000000;
+  }
+  html, body { height: 100%; background: var(--bg); font-family: -apple-system, "Helvetica Neue", Arial, sans-serif; overflow: hidden; }
+  body { color: var(--neon); padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+
+  #app { width: 100%; height: 100%; display: flex; flex-direction: column; transition: background 0.3s; }
+
+  #topbar {
+    flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 3vw 5vw 0;
+  }
+  #brand { display: flex; align-items: center; gap: 2vw; font-weight: 800; letter-spacing: 0.12em; font-size: 4.5vw; text-shadow: 0 0 10px var(--neon); }
+  #brand img { width: 8vw; max-width: 40px; height: auto; }
+  #installBtn {
+    border: 2px solid var(--neon); background: transparent; color: var(--neon);
+    border-radius: 999px; padding: 1.6vw 4vw; font-size: 3.4vw; font-weight: 700;
+    box-shadow: 0 0 10px var(--neon); display: none;
+  }
+  #installBtn:active { background: rgba(204,255,0,0.18); }
+
+  #stage { flex: 1 1 auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3vh; }
+  #phase { font-size: 9vw; font-weight: 800; letter-spacing: 0.15em; text-transform: uppercase; text-shadow: 0 0 12px currentColor, 0 0 28px currentColor; }
+  #time { font-size: 33vw; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; text-shadow: 0 0 18px currentColor, 0 0 45px currentColor; }
+
+  #controls { display: flex; gap: 6vw; margin-top: 2vh; }
+  .btn {
+    width: 22vw; height: 22vw; max-width: 110px; max-height: 110px; border-radius: 50%;
+    border: 3px solid var(--neon); background: transparent; color: var(--neon);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 14px var(--neon), inset 0 0 10px rgba(204,255,0,0.25);
+    transition: transform 0.08s, background 0.15s;
+  }
+  .btn span { font-size: 8vw; }
+  .btn:active { transform: scale(0.9); background: rgba(204,255,0,0.15); }
+
+  #footer { flex: 0 0 auto; text-align: center; padding: 0 5vw 3vw; }
+  #hint { font-size: 3.2vw; opacity: 0.7; line-height: 1.5; }
+  #hint a { color: var(--neon); }
+
+  #app.rest { color: var(--neon-rest); }
+  #app.rest .btn { border-color: var(--neon-rest); color: var(--neon-rest); box-shadow: 0 0 14px var(--neon-rest), inset 0 0 10px rgba(0,229,255,0.25); }
+
+  .flash { animation: flash 0.45s ease-out; }
+  @keyframes flash { 0% { background: rgba(204,255,0,0.45); } 100% { background: #000; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <div id="brand"><img src="icon.svg" alt="RingClock"><span>RingClock</span></div>
+    <button id="installBtn">앱 설치</button>
+  </div>
+
+  <div id="stage">
+    <div id="phase">ROUND 1</div>
+    <div id="time">03:00</div>
+    <div id="controls">
+      <button class="btn" id="playBtn"><span>▶</span></button>
+      <button class="btn" id="stopBtn"><span>⏸</span></button>
+      <button class="btn" id="resetBtn"><span>⟲</span></button>
+    </div>
+  </div>
+
+  <div id="footer">
+    <div id="hint">홈 화면에 추가하면 앱처럼 사용할 수 있어요 · <a href="icon.svg" download="RingClock-icon.svg">아이콘 받기</a></div>
+  </div>
+</div>
+
+<script>
+  const ROUND_SEC = 180; // 3분
+  const REST_SEC  = 30;  // 30초 휴식
+
+  const app = document.getElementById('app');
+  const phaseEl = document.getElementById('phase');
+  const timeEl = document.getElementById('time');
+
+  let round = 1, isRest = false, remaining = ROUND_SEC, running = false, timer = null;
+
+  // ---- 종소리 (Web Audio) ----
+  let audioCtx = null;
+  function ensureAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+  function bell(times = 3) {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    for (let i = 0; i < times; i++) {
+      const t = now + i * 0.32;
+      [880, 1320, 1760].forEach((f, idx) => {
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = f;
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(idx === 0 ? 0.5 : 0.25, t + 0.01);
+        g.gain.exponentialRampToValueAtTime(0.0008, t + 0.3);
+        osc.connect(g).connect(audioCtx.destination);
+        osc.start(t); osc.stop(t + 0.32);
+      });
+    }
+  }
+
+  function fmt(s) {
+    const m = Math.floor(s / 60), sec = s % 60;
+    return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+  }
+  function render() {
+    phaseEl.textContent = isRest ? 'REST' : ('ROUND ' + round);
+    timeEl.textContent = fmt(remaining);
+    app.classList.toggle('rest', isRest);
+  }
+  function flash() { app.classList.remove('flash'); void app.offsetWidth; app.classList.add('flash'); }
+
+  function tick() {
+    remaining--;
+    if (remaining < 0) {
+      if (isRest) { isRest = false; round++; remaining = ROUND_SEC; bell(3); }
+      else { isRest = true; remaining = REST_SEC; bell(1); }
+      flash();
+    }
+    render();
+  }
+  function play() {
+    ensureAudio();
+    if (running) return;
+    running = true;
+    if (!isRest && round === 1 && remaining === ROUND_SEC) bell(3);
+    timer = setInterval(tick, 1000);
+  }
+  function stop() { running = false; clearInterval(timer); }
+  function reset() { stop(); round = 1; isRest = false; remaining = ROUND_SEC; render(); }
+
+  document.getElementById('playBtn').addEventListener('click', play);
+  document.getElementById('stopBtn').addEventListener('click', stop);
+  document.getElementById('resetBtn').addEventListener('click', reset);
+
+  // 화면 꺼짐 방지
+  let wl = null;
+  async function keepAwake() { try { if ('wakeLock' in navigator) wl = await navigator.wakeLock.request('screen'); } catch(e) {} }
+  document.body.addEventListener('click', keepAwake, { once: true });
+
+  // ---- PWA: 설치 / 홈 화면 추가 ----
+  const installBtn = document.getElementById('installBtn');
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    installBtn.style.display = 'inline-block';
+  });
+  installBtn.addEventListener('click', async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    installBtn.style.display = 'none';
+  });
+  window.addEventListener('appinstalled', () => { installBtn.style.display = 'none'; });
+
+  // iOS 안내 (Safari는 beforeinstallprompt 미지원)
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+  if (isIOS && !standalone) {
+    document.getElementById('hint').innerHTML =
+      '아이폰: 공유 <b>⎙</b> → <b>홈 화면에 추가</b> 하면 앱 아이콘이 생겨요 · <a href="icon.svg" download="RingClock-icon.svg">아이콘 받기</a>';
+  }
+
+  // 서비스 워커 등록
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+
+  render();
+</script>
+</body>
+</html>

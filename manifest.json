@@ -1,0 +1,20 @@
+{
+  "name": "RingClock",
+  "short_name": "RingClock",
+  "description": "복싱 라운드 타이머 — 3분 라운드 / 30초 휴식, 종소리 포함",
+  "lang": "ko",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#000000",
+  "theme_color": "#ccff00",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
