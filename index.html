@@ -53,15 +53,37 @@
   .btn span { font-size: 8vw; }
   .btn:active { transform: scale(0.9); background: rgba(204,255,0,0.15); }
 
-  #footer { flex: 0 0 auto; text-align: center; padding: 0 5vw 3vw; }
+  #footer { flex: 0 0 auto; text-align: center; padding: 0 5vw 3vw; display: flex; flex-direction: column; align-items: center; gap: 1.6vh; }
   #hint { font-size: 3.2vw; opacity: 0.7; line-height: 1.5; }
-  #hint a { color: var(--neon); }
+  #iconBtn {
+    border: 2px solid var(--neon); background: transparent; color: var(--neon);
+    border-radius: 999px; padding: 1.4vw 4.5vw; font-size: 3.4vw; font-weight: 700;
+    box-shadow: 0 0 10px var(--neon);
+  }
+  #iconBtn:active { background: rgba(204,255,0,0.18); }
 
   #app.rest { color: var(--neon-rest); }
   #app.rest .btn { border-color: var(--neon-rest); color: var(--neon-rest); box-shadow: 0 0 14px var(--neon-rest), inset 0 0 10px rgba(0,229,255,0.25); }
 
   .flash { animation: flash 0.45s ease-out; }
   @keyframes flash { 0% { background: rgba(204,255,0,0.45); } 100% { background: #000; } }
+
+  /* 가로 모드: 높이 기준으로 크기를 줄여 화면에 맞춤 */
+  @media (orientation: landscape) and (max-height: 560px) {
+    #topbar { padding: 1.5vh 4vw 0; }
+    #brand { font-size: 3.6vh; gap: 1.5vh; }
+    #brand img { width: 6vh; max-width: 36px; }
+    #installBtn { font-size: 2.7vh; padding: 1vh 2.6vh; }
+    #stage { gap: 1vh; }
+    #phase { font-size: min(7vh, 8vw); }
+    #time { font-size: min(32vh, 20vw); }
+    #controls { gap: 6vh; margin-top: 0.5vh; }
+    .btn { width: 15vh; height: 15vh; }
+    .btn span { font-size: 7.5vh; }
+    #footer { padding: 0 4vw 1.5vh; }
+    #hint { font-size: 2.4vh; }
+    #iconBtn { font-size: 2.4vh; padding: 0.8vh 2.4vh; }
+  }
 </style>
 </head>
 <body>
@@ -82,7 +104,8 @@
   </div>
 
   <div id="footer">
-    <div id="hint">홈 화면에 추가하면 앱처럼 사용할 수 있어요 · <a href="icon.svg" download="RingClock-icon.svg">아이콘 받기</a></div>
+    <div id="hint">홈 화면에 추가하면 앱 아이콘이 생기고 앱처럼 실행돼요.</div>
+    <button id="iconBtn">🥊 아이콘 이미지 저장</button>
   </div>
 </div>
 
@@ -182,8 +205,42 @@
   const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
   if (isIOS && !standalone) {
     document.getElementById('hint').innerHTML =
-      '아이폰: 공유 <b>⎙</b> → <b>홈 화면에 추가</b> 하면 앱 아이콘이 생겨요 · <a href="icon.svg" download="RingClock-icon.svg">아이콘 받기</a>';
+      '아이폰: 공유 <b>⎙</b> → <b>홈 화면에 추가</b> 하면 앱 아이콘이 생겨요.';
   }
+
+  // ---- 아이콘 이미지 저장 (브라우저에서 SVG → PNG 변환) ----
+  const ICON_SVG = `\n<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">\n<defs>\n<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0a0a0a"/><stop offset="1" stop-color="#1a1f00"/></linearGradient>\n<linearGradient id="glove" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6ff33"/><stop offset="1" stop-color="#aacc00"/></linearGradient>\n</defs>\n<rect x="0" y="0" width="512" height="512" rx="112" fill="url(#bg)"/>\n<rect x="8" y="8" width="496" height="496" rx="106" fill="none" stroke="#ccff00" stroke-width="6" opacity="0.5"/>\n<g transform="translate(256 268) rotate(-12)">\n<path fill="url(#glove)" stroke="#1a1f00" stroke-width="8" stroke-linejoin="round" d="M-118 -40 C -132 -118 -70 -150 -8 -150 C 70 -150 132 -104 132 -18 C 132 70 70 132 -14 132 C -86 132 -118 96 -126 50 C -150 50 -150 -2 -126 -2 Z"/>\n<path fill="url(#glove)" stroke="#1a1f00" stroke-width="8" stroke-linejoin="round" d="M-118 6 C -156 6 -160 -56 -120 -58 C -96 -60 -86 -34 -92 -10 Z"/>\n<path fill="none" stroke="#1a1f00" stroke-width="7" stroke-linecap="round" opacity="0.55" d="M44 -132 C 70 -70 70 60 38 122"/>\n<rect x="-70" y="116" width="118" height="56" rx="20" fill="#0a0a0a" stroke="#ccff00" stroke-width="7"/>\n<line x1="-44" y1="144" x2="22" y2="144" stroke="#ccff00" stroke-width="7" stroke-linecap="round"/>\n</g>\n</svg>`;
+
+  function saveIcon() {
+    const size = 512;
+    const svgBlob = new Blob([ICON_SVG], { type: 'image/svg+xml;charset=utf-8' });
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = function () {
+      const c = document.createElement('canvas');
+      c.width = size; c.height = size;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(img, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      c.toBlob(function (png) {
+        const pngUrl = URL.createObjectURL(png);
+        const a = document.createElement('a');
+        a.href = pngUrl;
+        a.download = 'RingClock-icon.png';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        // iOS 등 다운로드 미지원 환경: 새 탭으로 열어 길게 눌러 저장
+        setTimeout(function () {
+          if (isIOS) window.open(pngUrl, '_blank');
+          else URL.revokeObjectURL(pngUrl);
+        }, 200);
+      }, 'image/png');
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); alert('아이콘 생성에 실패했어요. 다시 시도해 주세요.'); };
+    img.src = url;
+  }
+  document.getElementById('iconBtn').addEventListener('click', saveIcon);
 
   // 서비스 워커 등록
   if ('serviceWorker' in navigator) {
